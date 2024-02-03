@@ -9,14 +9,14 @@ services:
     ports:
       - "8009:80"
     volumes:
-      - "./nginx/conf.d/instasvc.conf:/etc/nginx/conf.d/default.conf"
+      - "./nginx/conf.d/authsvc.conf:/etc/nginx/conf.d/default.conf"
       - "./:/var/www/html/"
       - "nginx_logs:/var/log/nginx/"
-    container_name: instasvc_nginx
-    hostname: instasvc_nginx
+    container_name: authsvc_nginx
+    hostname: authsvc_nginx
     restart: unless-stopped
     networks:
-      - instasvc_net
+      - authsvc_net
     depends_on:
       mysql:
         condition: service_healthy
@@ -31,13 +31,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: instasvc:latest
+    image: authsvc:latest
 
-    container_name: instasvc
-    hostname: instasvc
+    container_name: authsvc
+    hostname: authsvc
     restart: unless-stopped
     networks:
-      - instasvc_net
+      - authsvc_net
     volumes:
       - "./php/opcache.ini:/usr/local/etc/php/conf.d/opcache.ini"
       - "./php/php.ini:/usr/local/etc/php/php.ini"
@@ -53,19 +53,19 @@ services:
     image: 'mysql/mysql-server:8.0'
     ports:
        - '3306:3306'
-    container_name: instasvc_mysql
-    hostname: instasvc_mysql
+    container_name: authsvc_mysql
+    hostname: authsvc_mysql
     restart: unless-stopped
     environment:
        MYSQL_ROOT_PASSWORD: 'secret'
-       MYSQL_DATABASE: 'instasvc_db'
-       MYSQL_USER: 'instasvc'
+       MYSQL_DATABASE: 'authsvc_db'
+       MYSQL_USER: 'authsvc'
        MYSQL_PASSWORD: 'password'
        MYSQL_ALLOW_EMPTY_PASSWORD: 1
     volumes:
         - 'mysql:/var/lib/mysql/'
     networks:
-      - instasvc_net
+      - authsvc_net
     healthcheck:
       test:
         - CMD
@@ -76,7 +76,7 @@ services:
       timeout: 5s
 
 networks:
-  instasvc_net:
+  authsvc_net:
 volumes:
   mysql:
   nginx_logs:

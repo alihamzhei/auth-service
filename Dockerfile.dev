@@ -7,7 +7,7 @@ RUN composer update --ignore-platform-reqs --no-scripts
 # Stage 2: Final image
 FROM php:8.2-fpm
 
-LABEL project=pageservice
+LABEL project=authservice
 
 LABEL maintainer=gameali774@hotmail.com
 
@@ -60,7 +60,7 @@ COPY --chown=www:www . /var/www/html
 # Copy composer dependencies from the composer stage
 COPY --chown=www:www --from=composer /app/vendor /var/www/html/vendor
 
-# Create a volume for the project path to share with Nginx 
+# Create a volume for the project path to share with Nginx
 VOLUME ["/var/www/html/"]
 
 # Change the current user to www
