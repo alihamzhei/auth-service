@@ -1,0 +1,137 @@
+name: Deploy Auth Service
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testing
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.2'
+        extensions: mbstring, pdo, pdo_pgsql, zip
+        coverage: xdebug
+    
+    - name: Copy .env
+      run: cp .env.example .env
+    
+    - name: Install Dependencies
+      run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+    
+    - name: Generate key
+      run: php artisan key:generate
+    
+    - name: Generate JWT Secret
+      run: php artisan jwt:secret
+    
+    - name: Directory Permissions
+      run: chmod -R 777 storage bootstrap/cache
+    
+    - name: Execute tests
+      run: vendor/bin/phpunit --coverage-clover=coverage.xml
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+  
+  build:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Login to Docker Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ secrets.DOCKER_REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Build and push
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true
+        tags: ${{ secrets.DOCKER_REGISTRY }}/auth-service:${{ github.sha }}
+    
+    - name: Set image tag
+      run: echo "IMAGE_TAG=${{ github.sha }}" >> $GITHUB_ENV
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set Kubernetes Context
+      uses: azure/k8s-set-context@v3
+      with:
+        kubeconfig: ${{ secrets.KUBE_CONFIG }}
+    
+    - name: Update deployment image
+      run: |
+        sed -i "s|\${DOCKER_REGISTRY}|${{ secrets.DOCKER_REGISTRY }}|g" kubernetes/deployment.yaml
+        sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" kubernetes/deployment.yaml
+    
+    - name: Deploy to Kubernetes
+      run: |
+        kubectl apply -f kubernetes/namespace.yaml
+        kubectl apply -f kubernetes/configmap.yaml
+        kubectl apply -f kubernetes/secrets.yaml
+        
+        # Update migration job with correct image tag
+        sed -i "s|\${DOCKER_REGISTRY}|${{ secrets.DOCKER_REGISTRY }}|g" kubernetes/migration-job.yaml
+        sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" kubernetes/migration-job.yaml
+        kubectl apply -f kubernetes/migration-job.yaml
+        
+        # Wait for migrations to complete
+        kubectl wait --for=condition=complete --timeout=60s job/auth-service-migrations -n auth-service
+        
+        # Deploy application
+        kubectl apply -f kubernetes/deployment.yaml
+        kubectl apply -f kubernetes/service.yaml
+        kubectl apply -f kubernetes/ingress.yaml
+    
+    - name: Verify deployment
+      run: |
+        kubectl rollout status deployment/auth-service -n auth-service
