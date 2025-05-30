@@ -417,30 +417,372 @@ php artisan pail --filter="level:error"
 
 ## 🐳 Docker Deployment
 
-### Development
+This project includes comprehensive Docker support with multi-stage builds, production optimizations, and complete orchestration setup.
+
+### Quick Start with Docker
 
 ```bash
-# Start development environment
-docker-compose up -d
+# Quick setup (recommended)
+make setup
 
-# Run migrations in container
-docker-compose exec app php artisan migrate
+# Or use the setup script directly
+./docker/scripts/setup.sh
+
+# Or manual setup
+cp .env.docker .env
+docker-compose up -d --build
+docker-compose exec app php artisan migrate --seed
 ```
 
-### Production
+### Docker Architecture
+
+The Docker setup includes:
+
+- **Multi-stage Dockerfile** (development/production targets)
+- **PostgreSQL** database with optimized configuration
+- **Redis** for caching and sessions
+- **Nginx** reverse proxy with security headers
+- **Queue Worker** for background jobs
+- **Scheduler** for Laravel task scheduling
+- **Health checks** and monitoring
+- **Optional services**: Prometheus, Grafana, MailHog
+
+### Available Services
+
+| Service | Description | Port | URL |
+|---------|-------------|------|-----|
+| **app** | Laravel application | 9000 | - |
+| **nginx** | Web server | 8000 | http://localhost:8000 |
+| **postgres** | Database | 5432 | localhost:5432 |
+| **redis** | Cache/Sessions | 6379 | localhost:6379 |
+| **queue** | Queue worker | - | - |
+| **scheduler** | Task scheduler | - | - |
+| **prometheus** | Metrics (optional) | 9090 | http://localhost:9090 |
+| **grafana** | Monitoring (optional) | 3000 | http://localhost:3000 |
+| **mailhog** | Email testing (dev) | 8025 | http://localhost:8025 |
+
+### Make Commands
+
+The project includes a comprehensive Makefile for easy management:
+
+#### Development Commands
+```bash
+make setup           # Initial project setup
+make start           # Start development environment
+make stop            # Stop all services
+make restart         # Restart services
+make logs            # View application logs
+make logs SERVICE=nginx  # View specific service logs
+make shell           # Access application shell
+make tinker          # Access Laravel Tinker
+```
+
+#### Database Commands
+```bash
+make migrate         # Run migrations
+make migrate-fresh   # Fresh migrations with seeders
+make seed            # Run seeders only
+make db-backup       # Create database backup
+make db-restore BACKUP_FILE=backup.sql  # Restore from backup
+```
+
+#### Testing Commands
+```bash
+make test            # Run tests
+make test-coverage   # Run tests with coverage
+```
+
+#### Cache Management
+```bash
+make cache-clear     # Clear all caches
+make cache-warm      # Warm up caches for production
+```
+
+#### Monitoring Commands
+```bash
+make monitoring-start    # Start Prometheus & Grafana
+make dev-services       # Start MailHog for email testing
+make health            # Check service health
+make status            # Show service status
+```
+
+#### Production Commands
+```bash
+make prod-build      # Build production images
+make prod-deploy     # Deploy to production
+make prod-start      # Start production environment
+make prod-logs       # View production logs
+```
+
+#### Maintenance Commands
+```bash
+make clean           # Clean up Docker resources
+make clean-all       # Clean everything including images
+make security-scan   # Run security scan on images
+```
+
+### Development Environment
+
+#### Starting Development Environment
 
 ```bash
-# Build production image
-docker build -f Dockerfile.prod -t auth-service:latest .
+# Option 1: Use Make (recommended)
+make setup
 
-# Run production container
-docker run -d \
-  --name auth-service \
-  -p 8000:8000 \
-  -e APP_ENV=production \
-  -e DB_CONNECTION=pgsql \
-  -e DB_HOST=postgres \
-  auth-service:latest
+# Option 2: Use setup script
+./docker/scripts/setup.sh
+
+# Option 3: Manual setup
+cp .env.docker .env
+docker-compose up -d --build
+docker-compose exec app php artisan key:generate
+docker-compose exec app php artisan jwt:secret
+docker-compose exec app php artisan migrate --seed
+```
+
+#### Development Features
+
+- **Hot reloading** with volume mounts
+- **MailHog** for email testing
+- **Detailed logging** with Laravel Pail
+- **Development-optimized** PHP configuration
+- **Automatic migrations** and seeding
+
+#### Accessing Services
+
+```bash
+# Application shell
+make shell
+# or
+docker-compose exec app bash
+
+# Laravel Tinker
+make tinker
+# or
+docker-compose exec app php artisan tinker
+
+# View logs
+make logs
+# or
+docker-compose logs -f app
+
+# Database access
+docker-compose exec postgres psql -U postgres -d auth_service
+```
+
+### Production Environment
+
+#### Production Deployment
+
+```bash
+# Setup production environment file
+cp .env.production .env
+# Edit .env with production values
+
+# Deploy using script (recommended)
+./docker/scripts/deploy-prod.sh
+
+# Or using Make
+make prod-deploy
+
+# Manual deployment
+docker-compose -f docker-compose.prod.yml up -d --build
+docker-compose -f docker-compose.prod.yml exec app php artisan migrate --force
+```
+
+#### Production Features
+
+- **Optimized images** with multi-stage builds
+- **Resource limits** and health checks
+- **SSL/TLS termination** with security headers
+- **Rate limiting** and DDoS protection
+- **Production caching** (OPcache, Redis)
+- **Monitoring integration** (Prometheus metrics)
+- **Automated backups** and rollback support
+
+#### Environment Variables
+
+**Development (.env.docker):**
+```env
+APP_ENV=local
+DB_HOST=postgres
+REDIS_HOST=redis
+APP_PORT=8000
+```
+
+**Production (.env.production):**
+```env
+APP_ENV=production
+APP_DEBUG=false
+DB_HOST=your-prod-db-host
+REDIS_HOST=your-prod-redis-host
+APP_URL=https://your-domain.com
+```
+
+### Docker Compose Profiles
+
+Use profiles to run optional services:
+
+```bash
+# Start with monitoring
+docker-compose --profile monitoring up -d
+
+# Start with development tools
+docker-compose --profile development up -d
+
+# Start everything
+docker-compose --profile monitoring --profile development up -d
+```
+
+### Health Checks & Monitoring
+
+#### Built-in Health Checks
+
+All services include health checks:
+
+```bash
+# Check service health
+make health
+
+# View service status
+make status
+
+# Monitor logs in real-time
+make logs
+```
+
+#### Prometheus Metrics
+
+```bash
+# Start monitoring stack
+make monitoring-start
+
+# Access Prometheus
+open http://localhost:9090
+
+# Access Grafana
+open http://localhost:3000
+# Default credentials: admin/admin
+```
+
+#### Custom Metrics
+
+The application exposes metrics at `/api/metrics`:
+
+- User registration count
+- Login attempts
+- Token generation rate
+- Response times
+- Error rates
+
+### Troubleshooting
+
+#### Common Issues
+
+1. **Port conflicts:**
+   ```bash
+   # Change ports in .env
+   APP_PORT=8001
+   DB_PORT=5433
+   REDIS_PORT=6380
+   ```
+
+2. **Permission issues:**
+   ```bash
+   # Fix storage permissions
+   docker-compose exec app chmod -R 775 storage bootstrap/cache
+   ```
+
+3. **Database connection issues:**
+   ```bash
+   # Check database status
+   docker-compose exec postgres pg_isready
+   
+   # Restart database
+   docker-compose restart postgres
+   ```
+
+4. **Memory issues:**
+   ```bash
+   # Increase Docker memory limit in Docker Desktop
+   # Or optimize services
+   docker-compose down
+   docker system prune -f
+   ```
+
+#### Debug Commands
+
+```bash
+# View all logs
+docker-compose logs
+
+# Check environment
+make env-check
+
+# Container resource usage
+docker stats
+
+# Network connectivity
+docker-compose exec app ping postgres
+docker-compose exec app ping redis
+```
+
+#### Fresh Start
+
+```bash
+# Complete reset
+make clean-all
+make setup
+
+# Or use the fresh command
+make fresh  # Warning: destroys all data
+```
+
+### Security in Docker
+
+#### Security Features
+
+1. **Non-root containers** - All services run as non-root users
+2. **Resource limits** - CPU and memory limits in production
+3. **Health checks** - Automatic service health monitoring
+4. **Secret management** - Environment-based configuration
+5. **Network isolation** - Custom Docker networks
+6. **Security scanning** - Built-in Trivy security scans
+
+#### Security Commands
+
+```bash
+# Run security scan
+make security-scan
+
+# Generate SSL certificates for development
+make generate-ssl
+
+# Check for vulnerabilities
+docker run --rm -v $(PWD):/app securecodewarrior/docker-security-checker /app
+```
+
+### Performance Optimization
+
+#### Production Optimizations
+
+- **OPcache enabled** with optimized settings
+- **Multi-stage builds** for smaller images
+- **Nginx optimizations** with gzip and caching
+- **Database tuning** with connection pooling
+- **Redis optimization** with memory limits
+
+#### Monitoring Performance
+
+```bash
+# Resource usage
+docker stats
+
+# Application metrics
+curl http://localhost:8000/api/metrics
+
+# Database performance
+docker-compose exec postgres psql -U postgres -d auth_service -c "SELECT * FROM pg_stat_statements;"
 ```
 
 ## 🔒 Security Considerations

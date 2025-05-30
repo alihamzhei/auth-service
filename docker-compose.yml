@@ -1,64 +1,229 @@
 version: '3.8'
 
 services:
-  auth-service:
+  # Main Laravel Application
+  app:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: auth-service
+      target: development
+    container_name: auth-service-app
     restart: unless-stopped
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-auth_service}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CACHE_DRIVER=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_CONNECTION=redis
     volumes:
       - .:/var/www/html
+      - auth-storage:/var/www/html/storage/app
     networks:
       - auth-network
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "php-fpm-healthcheck || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
+  # Nginx Web Server
   nginx:
     image: nginx:alpine
-    container_name: auth-nginx
+    container_name: auth-service-nginx
     restart: unless-stopped
     ports:
-      - "8000:80"
+      - "${APP_PORT:-8000}:80"
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
       - .:/var/www/html
+      - auth-logs:/var/log/nginx
     networks:
       - auth-network
     depends_on:
-      - auth-service
+      - app
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+  # PostgreSQL Database
   postgres:
-    image: postgres:14-alpine
-    container_name: auth-postgres
+    image: postgres:15-alpine
+    container_name: auth-service-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_DATABASE}
-      POSTGRES_USER: ${DB_USERNAME}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_DATABASE:-auth_service}
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - auth-network
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-auth_service}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # Redis Cache & Session Store
   redis:
-    image: redis:alpine
-    container_name: auth-redis
+    image: redis:7-alpine
+    container_name: auth-service-redis
     restart: unless-stopped
+    command: redis-server --appendonly yes --replica-read-only no
     volumes:
       - redis-data:/data
     networks:
       - auth-network
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Queue Worker
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: auth-service-queue
+    restart: unless-stopped
+    command: php artisan queue:work --verbose --tries=3 --timeout=90
+    environment:
+      - APP_ENV=local
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-auth_service}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - QUEUE_CONNECTION=redis
+    volumes:
+      - .:/var/www/html
+      - auth-storage:/var/www/html/storage/app
+    networks:
+      - auth-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Scheduler (for Laravel's task scheduling)
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: auth-service-scheduler
+    restart: unless-stopped
+    command: sh -c "while true; do php artisan schedule:run --verbose --no-interaction & sleep 60; done"
+    environment:
+      - APP_ENV=local
+      - DB_CONNECTION=pgsql
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_DATABASE=${DB_DATABASE:-auth_service}
+      - DB_USERNAME=${DB_USERNAME:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-secret}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - .:/var/www/html
+      - auth-storage:/var/www/html/storage/app
+    networks:
+      - auth-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Prometheus for metrics (optional)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: auth-service-prometheus
+    restart: unless-stopped
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    networks:
+      - auth-network
+    profiles:
+      - monitoring
+
+  # Grafana for visualization (optional)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: auth-service-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    volumes:
+      - grafana-data:/var/lib/grafana
+    networks:
+      - auth-network
+    profiles:
+      - monitoring
+
+  # MailHog for email testing (development only)
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: auth-service-mailhog
+    restart: unless-stopped
+    ports:
+      - "${MAILHOG_WEB_PORT:-8025}:8025"
+      - "${MAILHOG_SMTP_PORT:-1025}:1025"
+    networks:
+      - auth-network
+    profiles:
+      - development
 
 networks:
   auth-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   postgres-data:
+    driver: local
   redis-data:
+    driver: local
+  auth-storage:
+    driver: local
+  auth-logs:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
