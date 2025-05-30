@@ -29,12 +29,13 @@ class AuthService
     public function register(RegisterUserDTO $dto): array
     {
         $user = $this->registerUseCase->execute(
+            $dto->getName(),
             $dto->getEmail(),
             $dto->getPassword()
         );
         
         return [
-            'id' => $user->getId(),
+            'id' => $user->getUuid(),
             'email' => $user->getEmail()
         ];
     }

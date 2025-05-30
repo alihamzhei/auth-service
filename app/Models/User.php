@@ -12,10 +12,15 @@ class User extends Authenticatable implements JWTSubject
 {
     use HasFactory, Notifiable, HasRoles;
 
+    protected $primaryKey = 'uuid';
+    protected $keyType = 'string';
+    public $incrementing = false;
+
     protected $fillable = [
-        'id',
+        'name',
         'email',
         'password',
+        'uuid',
     ];
 
     protected $hidden = [

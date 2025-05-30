@@ -4,6 +4,7 @@ namespace App\Domain\UseCases\Auth;
 
 use App\Domain\Interfaces\UserRepositoryInterface;
 use App\Domain\Interfaces\TokenStorageInterface;
+use App\Models\User as UserModel;
 
 class LoginUser
 {
@@ -27,17 +28,17 @@ class LoginUser
             throw new \Exception('Invalid credentials');
         }
         
+        // Get the Eloquent model for JWT auth
+        $userModel = UserModel::where('email', $email)->first();
+        
         // Generate JWT token
-        $token = auth()->claims([
-            'sub' => $user->getId(),
-            'email' => $user->getEmail()
-        ])->login($user);
+        $token = auth()->login($userModel);
         
         // Generate refresh token
         $refreshToken = bin2hex(random_bytes(32));
         
-        // Store refresh token
-        $this->tokenStorage->storeRefreshToken($user->getId(), $refreshToken, 60 * 24 * 30); // 30 days
+        // Store refresh token (use getKey() which returns the primary key - UUID)
+        $this->tokenStorage->storeRefreshToken($userModel->getKey(), $refreshToken, 60 * 24 * 30); // 30 days
         
         return [
             'access_token' => $token,

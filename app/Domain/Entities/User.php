@@ -6,21 +6,33 @@ use Ramsey\Uuid\Uuid;
 
 class User
 {
-    private string $id;
+    private string $uuid;
+    private string $name;
     private string $email;
     private string $password;
     private array $roles = [];
 
-    public function __construct(string $email, string $password)
+    public function __construct(string $name, string $email, string $password, ?string $uuid = null)
     {
-        $this->id = Uuid::uuid4()->toString();
+        $this->uuid = $uuid ?? Uuid::uuid4()->toString();
+        $this->name = $name;
         $this->email = $email;
         $this->password = $password;
     }
 
+    public function getUuid(): string
+    {
+        return $this->uuid;
+    }
+
     public function getId(): string
     {
-        return $this->id;
+        return $this->uuid;
+    }
+
+    public function getName(): string
+    {
+        return $this->name;
     }
 
     public function getEmail(): string

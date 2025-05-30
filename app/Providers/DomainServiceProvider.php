@@ -16,7 +16,7 @@ class DomainServiceProvider extends ServiceProvider
     {
         $this->app->bind(UserRepositoryInterface::class, EloquentUserRepository::class);
         $this->app->bind(RoleRepositoryInterface::class, EloquentRoleRepository::class);
-        $this->app->bind(TokenStorageInterface::class, RedisTokenStorage::class);
+        $this->app->bind(TokenStorageInterface::class, \App\Infrastructure\Repositories\FileTokenStorage::class);
     }
 
     public function boot()

@@ -24,7 +24,6 @@ class AuthController extends Controller
     public function __construct(AuthService $authService)
     {
         $this->authService = $authService;
-        $this->middleware('auth:api', ['except' => ['login', 'register']]);
     }
 
     /**
@@ -35,7 +34,8 @@ class AuthController extends Controller
      *     @OA\RequestBody(
      *         required=true,
      *         @OA\JsonContent(
-     *             required={"email", "password"},
+     *             required={"name", "email", "password"},
+     *             @OA\Property(property="name", type="string", maxLength=255),
      *             @OA\Property(property="email", type="string", format="email"),
      *             @OA\Property(property="password", type="string", minLength=8)
      *         )
@@ -44,7 +44,7 @@ class AuthController extends Controller
      *         response=201,
      *         description="User registered successfully",
      *         @OA\JsonContent(
-     *             @OA\Property(property="id", type="string", format="uuid"),
+     *             @OA\Property(property="id", type="string", format="uuid", description="User UUID"),
      *             @OA\Property(property="email", type="string", format="email")
      *         )
      *     ),
@@ -57,6 +57,7 @@ class AuthController extends Controller
     public function register(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
+            'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:8',
         ]);
@@ -66,6 +67,7 @@ class AuthController extends Controller
         }
 
         $dto = new RegisterUserDTO(
+            $request->input('name'),
             $request->input('email'),
             $request->input('password')
         );
@@ -171,7 +173,7 @@ class AuthController extends Controller
         }
 
         try {
-            $userId = auth()->user()->id;
+            $userId = auth()->user()->getKey();
             $result = $this->authService->refresh($userId, $request->input('refresh_token'));
             return response()->json($result);
         } catch (\Exception $e) {
@@ -201,7 +203,7 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        $userId = auth()->user()->id;
+        $userId = auth()->user()->getKey();
         $refreshToken = $request->input('refresh_token');
         
         $this->authService->logout($userId, $refreshToken);
@@ -230,12 +232,12 @@ class AuthController extends Controller
      *     )
      * )
      */
-    public function validate(): JsonResponse
+    public function validateToken(): JsonResponse
     {
         $user = auth()->userOrFail();
         
         return response()->json([
-            'id' => $user->id,
+            'id' => $user->getKey(),
             'email' => $user->email,
             'roles' => $user->getRoleNames()
         ]);

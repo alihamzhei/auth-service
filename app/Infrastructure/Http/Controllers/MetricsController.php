@@ -19,6 +19,9 @@ class MetricsController extends Controller
     public function metrics(): Response
     {
         try {
+            // Add some basic auth service metrics
+            $this->addAuthMetrics();
+            
             $renderer = new RenderTextFormat();
             $result = $renderer->render($this->registry->getMetricFamilySamples());
 
@@ -30,5 +33,17 @@ class MetricsController extends Controller
             // Return a 500 error response
             return response('Error retrieving metrics', 500, ['Content-Type' => 'text/plain']);
         }
+    }
+
+    private function addAuthMetrics(): void
+    {
+        // Total users count
+        $userCount = \App\Models\User::count();
+        $gauge = $this->registry->getOrRegisterGauge('auth_service', 'total_users', 'Total number of registered users');
+        $gauge->set($userCount);
+
+        // Service uptime (basic metric)
+        $uptimeGauge = $this->registry->getOrRegisterGauge('auth_service', 'uptime_seconds', 'Auth service uptime in seconds');
+        $uptimeGauge->set(time() - strtotime('today')); // Simple uptime since start of day
     }
 }

@@ -19,10 +19,13 @@ class RegisterUser
         $this->roleRepository = $roleRepository;
     }
 
-    public function execute(string $email, string $password): User
+    public function execute(string $name, string $email, string $password): User
     {
+        // Hash the password
+        $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+        
         // Create a new user
-        $user = new User($email, $password);
+        $user = new User($name, $email, $hashedPassword);
         
         // Assign default role
         $defaultRole = $this->roleRepository->findByName('user');

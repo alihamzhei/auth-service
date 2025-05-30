@@ -12,8 +12,14 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->alias([
+            'auth.ratelimit' => \App\Infrastructure\Http\Middleware\RateLimitLogin::class,
+            'jwt.auth' => \App\Infrastructure\Http\Middleware\JwtMiddleware::class,
+        ]);
     })
+    ->withProviders([
+        \App\Providers\PrometheusServiceProvider::class,
+    ])
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();

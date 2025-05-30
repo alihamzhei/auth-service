@@ -21,4 +21,14 @@ class RedisTokenStorage implements TokenStorageInterface
     {
         Redis::del("refresh_token:{$userId}:{$token}");
     }
+
+    public function invalidateAllUserTokens(string $userId): void
+    {
+        $pattern = "refresh_token:{$userId}:*";
+        $keys = Redis::keys($pattern);
+        
+        if (!empty($keys)) {
+            Redis::del($keys);
+        }
+    }
 }

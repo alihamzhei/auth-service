@@ -10,7 +10,7 @@ class EloquentUserRepository implements UserRepositoryInterface
 {
     public function findById(string $id): ?UserEntity
     {
-        $user = UserModel::find($id);
+        $user = UserModel::where('uuid', $id)->first();
         
         if (!$user) {
             return null;
@@ -32,11 +32,14 @@ class EloquentUserRepository implements UserRepositoryInterface
 
     public function save(UserEntity $user): UserEntity
     {
+        // For new users, create with Domain-generated UUID
+        // For existing users, find by UUID and update
         $model = UserModel::updateOrCreate(
-            ['id' => $user->getId()],
+            ['uuid' => $user->getUuid()],
             [
+                'name' => $user->getName(),
                 'email' => $user->getEmail(),
-                'password' => $user->getPassword()
+                'password' => $user->getPassword(),
             ]
         );
         
@@ -50,7 +53,7 @@ class EloquentUserRepository implements UserRepositoryInterface
 
     private function mapToEntity(UserModel $model): UserEntity
     {
-        $user = new UserEntity($model->email, $model->password);
+        $user = new UserEntity($model->name, $model->email, $model->password, $model->uuid);
         
         // Map roles
         foreach ($model->roles as $role) {
