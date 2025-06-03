@@ -445,7 +445,6 @@ The Docker setup includes:
 - **Queue Worker** for background jobs
 - **Scheduler** for Laravel task scheduling
 - **Health checks** and monitoring
-- **Optional services**: Prometheus, Grafana, MailHog
 
 ### Available Services
 
@@ -457,9 +456,6 @@ The Docker setup includes:
 | **redis** | Cache/Sessions | 6379 | localhost:6379 |
 | **queue** | Queue worker | - | - |
 | **scheduler** | Task scheduler | - | - |
-| **prometheus** | Metrics (optional) | 9090 | http://localhost:9090 |
-| **grafana** | Monitoring (optional) | 3000 | http://localhost:3000 |
-| **mailhog** | Email testing (dev) | 8025 | http://localhost:8025 |
 
 ### Make Commands
 
@@ -498,10 +494,8 @@ make cache-clear     # Clear all caches
 make cache-warm      # Warm up caches for production
 ```
 
-#### Monitoring Commands
+#### Health Commands
 ```bash
-make monitoring-start    # Start Prometheus & Grafana
-make dev-services       # Start MailHog for email testing
 make health            # Check service health
 make status            # Show service status
 ```
@@ -543,7 +537,6 @@ docker-compose exec app php artisan migrate --seed
 #### Development Features
 
 - **Hot reloading** with volume mounts
-- **MailHog** for email testing
 - **Detailed logging** with Laravel Pail
 - **Development-optimized** PHP configuration
 - **Automatic migrations** and seeding
@@ -619,20 +612,6 @@ REDIS_HOST=your-prod-redis-host
 APP_URL=https://your-domain.com
 ```
 
-### Docker Compose Profiles
-
-Use profiles to run optional services:
-
-```bash
-# Start with monitoring
-docker-compose --profile monitoring up -d
-
-# Start with development tools
-docker-compose --profile development up -d
-
-# Start everything
-docker-compose --profile monitoring --profile development up -d
-```
 
 ### Health Checks & Monitoring
 
@@ -651,19 +630,6 @@ make status
 make logs
 ```
 
-#### Prometheus Metrics
-
-```bash
-# Start monitoring stack
-make monitoring-start
-
-# Access Prometheus
-open http://localhost:9090
-
-# Access Grafana
-open http://localhost:3000
-# Default credentials: admin/admin
-```
 
 #### Custom Metrics
 
@@ -771,19 +737,6 @@ docker run --rm -v $(PWD):/app securecodewarrior/docker-security-checker /app
 - **Nginx optimizations** with gzip and caching
 - **Database tuning** with connection pooling
 - **Redis optimization** with memory limits
-
-#### Monitoring Performance
-
-```bash
-# Resource usage
-docker stats
-
-# Application metrics
-curl http://localhost:8000/api/metrics
-
-# Database performance
-docker-compose exec postgres psql -U postgres -d auth_service -c "SELECT * FROM pg_stat_statements;"
-```
 
 ## 🔒 Security Considerations
 

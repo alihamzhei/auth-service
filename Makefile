@@ -90,22 +90,7 @@ prod-stop: ## Stop production environment
 prod-logs: ## View production logs
 	@docker-compose -f docker-compose.prod.yml logs -f $(or $(SERVICE),app)
 
-# Monitoring (optional services)
-monitoring-start: ## Start monitoring services (Prometheus, Grafana)
-	@echo "$(GREEN)Starting monitoring services...$(RESET)"
-	@docker-compose --profile monitoring up -d prometheus grafana
-	@echo "$(GREEN)✅ Prometheus: http://localhost:9090$(RESET)"
-	@echo "$(GREEN)✅ Grafana: http://localhost:3000 (admin/admin)$(RESET)"
 
-monitoring-stop: ## Stop monitoring services
-	@echo "$(RED)Stopping monitoring services...$(RESET)"
-	@docker-compose --profile monitoring down
-
-# Development Services
-dev-services: ## Start additional development services (MailHog)
-	@echo "$(GREEN)Starting development services...$(RESET)"
-	@docker-compose --profile development up -d mailhog
-	@echo "$(GREEN)✅ MailHog: http://localhost:8025$(RESET)"
 
 # Maintenance
 clean: ## Clean up Docker resources

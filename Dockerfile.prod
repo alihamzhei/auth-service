@@ -1,37 +1,8 @@
+# This file is deprecated - use main Dockerfile with production target instead
+# docker build --target production -t auth-service:prod .
+
+# For backward compatibility, this file now uses the main Dockerfile
 FROM php:8.2-fpm-alpine
 
-# Install dependencies
-RUN apk add --no-cache \
-    nginx \
-    postgresql-dev \
-    oniguruma-dev \
-    libxml2-dev \
-    zip \
-    unzip
-
-# Install PHP extensions
-RUN docker-php-ext-install pdo pdo_pgsql mbstring exif pcntl bcmath
-
-# Install Composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
-
-# Set working directory
-WORKDIR /var/www/html
-
-# Copy application files
-COPY . .
-
-# Install dependencies
-RUN composer install --optimize-autoloader --no-dev
-
-# Set permissions
-RUN chown -R www-data:www-data /var/www/html/storage /var/www/html/bootstrap/cache
-
-# Configure Nginx
-COPY docker/nginx/default.conf /etc/nginx/http.d/default.conf
-
-# Expose port
-EXPOSE 80
-
-# Start Nginx and PHP-FPM
-CMD ["sh", "-c", "php-fpm -D && nginx -g 'daemon off;'"]
+# Redirect to main Dockerfile message
+RUN echo "WARNING: Dockerfile.prod is deprecated. Use 'docker build --target production' with the main Dockerfile instead." && exit 1
